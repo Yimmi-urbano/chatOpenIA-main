@@ -4,6 +4,17 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 
+const rateLimit = require('express-rate-limit');
+
+const chatLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 5, 
+  message: {
+    success: false,
+    error: "Demasiadas solicitudes, espera un momento antes de intentarlo nuevamente."
+  }
+});
+
 const chatRouter = require('./api/components/chatgtp/chatgtp.router');
 const ttsRouter = require('./api/components/convertTextToVoice/awsdolly.router');
 
@@ -17,8 +28,8 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
   .then(() => console.log("MongoDB conectado"))
   .catch(err => console.error("Error MongoDB:", err));
 
-app.use('/chatbot', chatRouter);
-app.use('/textvoice', ttsRouter);
+app.use('/chatbot', chatLimiter, chatRouter);
+app.use('/textvoice', chatLimiter,  ttsRouter);
 
 app.listen(PORT, () => {
   console.log(`Servidor en http://localhost:${PORT}`);

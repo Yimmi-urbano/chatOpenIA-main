@@ -123,7 +123,7 @@ const buildSystemMessage = (domain, productDescriptions, infoBusiness) => {
 ---
 
 ### REGLA DE ORO: PREGUNTA ANTES DE ACTUAR
-NUNCA ejecutes una acción final como "go_to_url" o "add_to_cart" en tu primera respuesta. Primero informa y luego pregunta al usuario si desea continuar. Solo si el usuario responde de forma afirmativa y explícita, podrás ejecutar la acción en el siguiente turno. Prohibido inventar productos, descripciones o enlaces. Solo responde usando los productos proporcionados. Si un producto no está, informa amablemente que no lo tienes.
+NUNCA ejecutes una acción final como "go_to_url" o "add_to_cart" o "show_product" en tu primera respuesta. Primero informa y luego pregunta al usuario si desea continuar. Solo si el usuario responde de forma afirmativa y explícita, podrás ejecutar la acción en el siguiente turno. Prohibido inventar productos, descripciones o enlaces. Solo responde usando los productos proporcionados. Si un producto no está, informa amablemente que no lo tienes.
 
 ---
 
@@ -137,9 +137,7 @@ NUNCA ejecutes una acción final como "go_to_url" o "add_to_cart" en tu primera 
 ### CANALES DE RESPUESTA DISPONIBLES
 1. "message": Texto visual mostrado al usuario. No links, no botones, no html
 2. "audio_description": Frase hablada. No menciones botones, links ni elementos visuales.
-
 ---
-
 ### FORMATO DE RESPUESTA (JSON plano OBLIGATORIO)
 \`\`\`json
 {
@@ -149,12 +147,21 @@ NUNCA ejecutes una acción final como "go_to_url" o "add_to_cart" en tu primera 
     "type": "add_to_cart | go_to_url | show_product | none",
     "productId": "ID del producto o null",
     "quantity": "número o null",
-    "url": "URL completa o null"
+    "url": "URL completa o null",
+    "price_sale": Precio de oferta o null,
+    "title": Titulo del producto o null,
+    "price_regular":Precio normal o null,
+    "image": Imagen del producto o null,
+    "slug": Slug del producto o null
   }
 }
 \`\`\`
-
 ---
+
+IMPORTANTE: 
+Devuelve únicamente JSON plano válido. 
+No uses comillas simples, no uses comentarios, no uses.
+
 
 ### COMPORTAMIENTO INTELIGENTE
 
@@ -169,8 +176,10 @@ NUNCA ejecutes una acción final como "go_to_url" o "add_to_cart" en tu primera 
 
 **Producto EXISTENTE:**
 1. Menciona detalles del producto.
-2. Pregunta si desea verlo o agregarlo al carrito.
-3. No ejecutes ninguna acción aún.
+2. Si te pregunta por un producto en especifico o te pide recomendaciones de productos usa este tipo de respuesta o dice que quiere ver el producto - ### FORMATO DE RESPUESTA PARA MOSTRAR PRODUCTOS 
+3. Pregunta si desea verlo o agregarlo al carrito.
+3.1 Si responde que si desea verlo usa: ### FORMATO DE RESPUESTA PARA MOSTRAR PRODUCTOS con la URL del producto
+4. No ejecutes ninguna acción aún.
 Ejemplo:
 - message: "El Reloj Smart XY tiene monitor de ritmo cardíaco y batería de larga duración. ¿Deseas verlo?"
 - audio_description: "Este reloj tiene monitor de ritmo y buena batería. ¿Quieres verlo?"
@@ -209,7 +218,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey) => {
 
   const productDescriptions = products.map((p) => {
     const clean = (str) => (str || '').replace(/\r?\n|\r/g, ' ').replace(/"/g, "'");
-    return `ID: ${p._id}, Nombre: "${clean(p.title)}", Precio: S/${p.price?.regular ?? 'N/A'}, Oferta: S/${p.price?.sale ?? 'N/A'}, Descripción: ${clean(p.description_short)}, URL: /product/${p.slug}`;
+    return `ID: ${p._id}, Nombre: "${clean(p.title)}", Precio: S/${p.price?.regular ?? 'N/A'}, Oferta: S/${p.price?.sale ?? 'N/A'}, Descripción: ${clean(p.description_short)}, URL: /product/${p.slug}, IMAGEN: ${p.image_default[0]}, SLUG: ${p.slug}`;
   }).join(' | ');
 
   const config = await fetchConfig(domain);
@@ -255,7 +264,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey) => {
       console.error("Error al parsear la respuesta JSON de OpenAI:", rawAssistantResponse);
       throw new Error("La respuesta de la IA no tenía un formato JSON válido.");
     }
-    
+
     // Almacena el turno del usuario y la respuesta del asistente en el historial.
     await chatHistoryManager.appendToHistory(domain, [
       { role: 'user', content: userMessage },
