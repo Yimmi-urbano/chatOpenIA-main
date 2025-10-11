@@ -9,8 +9,8 @@ const synthesizeSpeech = async (text) => {
     Text: text,
     OutputFormat: 'mp3',
     Engine: 'neural',
-    VoiceId: 'Lucia',
-    LanguageCode: "es-MX"
+    VoiceId: 'Mia',
+    LanguageCode: "es-MX",
   };
 
   const data = await polly.synthesizeSpeech(params).promise();
