@@ -2,18 +2,18 @@ const { processChatWithGPT } = require('./chatgtp.service');
 
 const handleChatRequest = async (req, res) => {
   const { domain, userMessage } = req.body;
-  const { userId, email } = req.user;
+  const { id, email, merchandId } = req.user;
 
-  if (!domain || !userMessage) {
+  if (!domain || !userMessage ) {
     return res.status(400).json({ error: 'Faltan domain o userMessage' });
   }
 
-  if (!userId || !email) {
+  if (!id || !email || !merchandId) {
     return res.status(400).json({ error: 'Falta información del usuario en el token' });
   }
 
   try {
-    const assistantMessage = await processChatWithGPT(domain, userMessage, process.env.OPENAI_API_KEY, userId, email);
+    const assistantMessage = await processChatWithGPT(domain, userMessage, process.env.OPENAI_API_KEY, id, email, merchandId);
     res.json({ assistantMessage });
   } catch (err) {
     console.error('Error:', err.message);
