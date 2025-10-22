@@ -10,6 +10,7 @@
  */
 
 const axios = require('axios');
+const moment = require('moment-timezone');
 require('dotenv').config();
 const { getProductsByDomain } = require('./chatgtp.dao');
 const Conversation = require('../../../models/Conversation');
@@ -70,7 +71,13 @@ const chatHistoryManager = {
       console.warn(`Historial para ${domain} y usuario ${userId} se está añadiendo sin haber sido inicializado.`);
     }
 
-    const updatedHistory = [...currentHistory, ...newMessages];
+    const timezone = process.env.TIMEZONE || 'UTC';
+    const messagesWithTimestamp = newMessages.map(message => ({
+      ...message,
+      timestamp: moment().tz(timezone).toDate(),
+    }));
+
+    const updatedHistory = [...currentHistory, ...messagesWithTimestamp];
 
     // Poda el historial si excede el límite, pero siempre conserva el mensaje del sistema.
     if (updatedHistory.length > MAX_HISTORY_LENGTH) {
@@ -241,7 +248,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
   }
 
   // Añade el mensaje del usuario al historial para la llamada a la API.
-  const messagesForAPI = [...conversation, { role: 'user', content: userMessage }];
+  const messagesForAPI = [...conversation.map(({ role, content }) => ({ role, content })), { role: 'user', content: userMessage }];
 
   try {
     const { data } = await axios.post(
