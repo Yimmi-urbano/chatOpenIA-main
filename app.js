@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+require('./config/database');
 
 const rateLimit = require('express-rate-limit');
 
@@ -23,10 +23,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
-
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("MongoDB conectado"))
-  .catch(err => console.error("Error MongoDB:", err));
 
 app.use('/chatbot', chatLimiter, chatRouter);
 app.use('/textvoice', chatLimiter,  ttsRouter);

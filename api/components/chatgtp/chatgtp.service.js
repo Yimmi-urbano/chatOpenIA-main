@@ -13,7 +13,7 @@ const axios = require('axios');
 const moment = require('moment-timezone');
 require('dotenv').config();
 const { getProductsByDomain } = require('./chatgtp.dao');
-const Conversation = require('../../../models/Conversation');
+const { Conversation } = require('../../../config/database');
 
 // --- Configuración Centralizada ---
 // Mover constantes a un solo lugar facilita su modificación y mantenimiento.

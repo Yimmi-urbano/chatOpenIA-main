@@ -34,6 +34,4 @@ const conversationSchema = new mongoose.Schema({
 
 conversationSchema.index({ domain: 1, userId: 1 }, { unique: true });
 
-const Conversation = mongoose.model('Conversation', conversationSchema);
-
-module.exports = Conversation;
+module.exports = conversationSchema;
