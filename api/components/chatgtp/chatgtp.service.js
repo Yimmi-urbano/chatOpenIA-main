@@ -12,6 +12,7 @@
 const axios = require('axios');
 require('dotenv').config();
 const { getProductsByDomain } = require('./chatgtp.dao');
+const Conversation = require('../../../models/Conversation');
 
 // --- Configuración Centralizada ---
 // Mover constantes a un solo lugar facilita su modificación y mantenimiento.
@@ -29,54 +30,59 @@ const CACHE = new Map(); // Caché en memoria simple para configuraciones de dom
  * para gestionar el historial de conversaciones de forma persistente y escalable.
  */
 const chatHistoryManager = {
-  // En un entorno de producción, esto interactuaría con Redis, MongoDB, etc.
-  _histories: new Map(),
-
   /**
-   * Obtiene el historial de una conversación por dominio.
+   * Obtiene el historial de una conversación por dominio y usuario desde MongoDB.
    * @param {string} domain - El identificador del inquilino (tenant).
+   * @param {string} userId - El ID del usuario.
    * @returns {Promise<Array<Object>|null>} El historial de mensajes.
    */
-  async getHistory(domain) {
-    return this._histories.get(domain) || null;
+  async getHistory(domain, userId) {
+    const conversation = await Conversation.findOne({ domain, userId });
+    return conversation ? conversation.messages : null;
   },
 
   /**
-   * Actualiza o crea el historial de una conversación.
+   * Actualiza o crea el historial de una conversación en MongoDB.
    * @param {string} domain - El identificador del inquilino.
+   * @param {string} userId - El ID del usuario.
+   * @param {string} userEmail - El email del usuario.
    * @param {Array<Object>} messages - El array completo de nuevos mensajes.
    */
-  async setHistory(domain, messages) {
-    this._histories.set(domain, messages);
+  async setHistory(domain, userId, userEmail, messages) {
+    await Conversation.findOneAndUpdate(
+      { domain, userId },
+      { userEmail, messages },
+      { new: true, upsert: true }
+    );
   },
 
   /**
-   * Añade mensajes al historial existente, manteniendo el tamaño máximo.
+   * Añade mensajes al historial existente en MongoDB, manteniendo el tamaño máximo.
    * @param {string} domain - El identificador del inquilino.
+   * @param {string} userId - El ID del usuario.
+   * @param {string} userEmail - El email del usuario.
    * @param {Array<Object>} newMessages - Array de nuevos mensajes a añadir (usuario y/o asistente).
    * @returns {Promise<Array<Object>>} El historial actualizado.
    */
-  async appendToHistory(domain, newMessages) {
-    const currentHistory = (await this.getHistory(domain)) || [];
+  async appendToHistory(domain, userId, userEmail, newMessages) {
+    const currentHistory = (await this.getHistory(domain, userId)) || [];
     if (currentHistory.length === 0) {
-      // Debería ser inicializado con el prompt del sistema primero.
-      // Esta función asume que la inicialización ya ocurrió.
-      console.warn(`Historial para ${domain} se está añadiendo sin haber sido inicializado.`);
+      console.warn(`Historial para ${domain} y usuario ${userId} se está añadiendo sin haber sido inicializado.`);
     }
 
     const updatedHistory = [...currentHistory, ...newMessages];
 
     // Poda el historial si excede el límite, pero siempre conserva el mensaje del sistema.
     if (updatedHistory.length > MAX_HISTORY_LENGTH) {
-      const systemMessage = updatedHistory[0]; // El primer mensaje siempre es el del sistema.
-      const conversation = updatedHistory.slice(1); // El resto es la conversación.
+      const systemMessage = updatedHistory[0];
+      const conversation = updatedHistory.slice(1);
       const prunedConversation = conversation.slice(-MAX_HISTORY_LENGTH + 1);
       const finalHistory = [systemMessage, ...prunedConversation];
-      await this.setHistory(domain, finalHistory);
+      await this.setHistory(domain, userId, userEmail, finalHistory);
       return finalHistory;
     }
 
-    await this.setHistory(domain, updatedHistory);
+    await this.setHistory(domain, userId, userEmail, updatedHistory);
     return updatedHistory;
   },
 };
@@ -202,9 +208,11 @@ ${safeProductDescriptions}`;
  * @param {string} domain
  * @param {string} userMessage
  * @param {string} apiKey
+ * @param {string} userId
+ * @param {string} userEmail
  * @returns {Promise<Object>}
  */
-const processChatWithGPT = async (domain, userMessage, apiKey) => {
+const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail) => {
   // Nota: `getProductsByDomain` también podría ser cacheado si el catálogo no cambia constantemente.
   const products = await getProductsByDomain(domain);
 
@@ -223,13 +231,13 @@ const processChatWithGPT = async (domain, userMessage, apiKey) => {
 
   const config = await fetchConfig(domain);
 
-  let conversation = await chatHistoryManager.getHistory(domain);
+  let conversation = await chatHistoryManager.getHistory(domain, userId);
 
   // Si no hay historial, se crea con el prompt del sistema.
   if (!conversation) {
     const systemMessage = buildSystemMessage(domain, productDescriptions, config);
     conversation = [{ role: 'system', content: systemMessage }];
-    await chatHistoryManager.setHistory(domain, conversation);
+    await chatHistoryManager.setHistory(domain, userId, userEmail, conversation);
   }
 
   // Añade el mensaje del usuario al historial para la llamada a la API.
@@ -266,7 +274,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey) => {
     }
 
     // Almacena el turno del usuario y la respuesta del asistente en el historial.
-    await chatHistoryManager.appendToHistory(domain, [
+    await chatHistoryManager.appendToHistory(domain, userId, userEmail, [
       { role: 'user', content: userMessage },
       // Es crucial guardar el contenido exacto que la IA generó para mantener el contexto.
       { role: 'assistant', content: rawAssistantResponse },
