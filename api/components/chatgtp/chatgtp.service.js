@@ -49,10 +49,10 @@ const chatHistoryManager = {
    * @param {string} userEmail - El email del usuario.
    * @param {Array<Object>} messages - El array completo de nuevos mensajes.
    */
-  async setHistory(domain, userId, userEmail, messages) {
+  async setHistory(domain, userId, userEmail, messages, merchandId) {
     await Conversation.findOneAndUpdate(
       { domain, userId },
-      { userEmail, messages },
+      { userEmail, messages, merchandId },
       { new: true, upsert: true }
     );
   },
@@ -219,7 +219,7 @@ ${safeProductDescriptions}`;
  * @param {string} userEmail
  * @returns {Promise<Object>}
  */
-const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail) => {
+const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail, merchandId) => {
   // Nota: `getProductsByDomain` también podría ser cacheado si el catálogo no cambia constantemente.
   const products = await getProductsByDomain(domain);
 
@@ -244,7 +244,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
   if (!conversation) {
     const systemMessage = buildSystemMessage(domain, productDescriptions, config);
     conversation = [{ role: 'system', content: systemMessage }];
-    await chatHistoryManager.setHistory(domain, userId, userEmail, conversation);
+    await chatHistoryManager.setHistory(domain, userId, userEmail, conversation, merchandId);
   }
 
   // Añade el mensaje del usuario al historial para la llamada a la API.

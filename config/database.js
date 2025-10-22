@@ -19,7 +19,7 @@ function createConnection(uri) {
 }
 
 const clientsConnection = createConnection(process.env.MONGO_URI_CLIENTS);
-const catalogConnection = createConnection(process.env.MONGO_URI_CATALOG);
+const catalogConnection = createConnection(process.env.MONGO_URI);
 
 const ConversationSchema = require('../models/Conversation');
 const ProductSchema = require('../models/Product');
