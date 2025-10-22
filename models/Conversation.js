@@ -6,6 +6,11 @@ const conversationSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
+  merchandId: {
+    type: String,
+    required: true,
+    index: true,
+  },
   userId: {
     type: String,
     required: true,
@@ -15,16 +20,23 @@ const conversationSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  messages: {
-    type: Array,
-    required: true,
-  },
-}, {
-  timestamps: true,
+  messages: [{
+    role: {
+      type: String,
+      required: true,
+      enum: ['user', 'assistant', 'system'],
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
 });
 
 conversationSchema.index({ domain: 1, userId: 1 }, { unique: true });
 
-const Conversation = mongoose.model('Conversation', conversationSchema);
-
-module.exports = Conversation;
+module.exports = conversationSchema;

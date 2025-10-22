@@ -10,9 +10,10 @@
  */
 
 const axios = require('axios');
+const moment = require('moment-timezone');
 require('dotenv').config();
 const { getProductsByDomain } = require('./chatgtp.dao');
-const Conversation = require('../../../models/Conversation');
+const { Conversation } = require('../../../config/database');
 
 // --- Configuración Centralizada ---
 // Mover constantes a un solo lugar facilita su modificación y mantenimiento.
@@ -48,10 +49,10 @@ const chatHistoryManager = {
    * @param {string} userEmail - El email del usuario.
    * @param {Array<Object>} messages - El array completo de nuevos mensajes.
    */
-  async setHistory(domain, userId, userEmail, messages) {
+  async setHistory(domain, userId, userEmail, messages, merchandId) {
     await Conversation.findOneAndUpdate(
       { domain, userId },
-      { userEmail, messages },
+      { userEmail, messages, merchandId },
       { new: true, upsert: true }
     );
   },
@@ -70,7 +71,13 @@ const chatHistoryManager = {
       console.warn(`Historial para ${domain} y usuario ${userId} se está añadiendo sin haber sido inicializado.`);
     }
 
-    const updatedHistory = [...currentHistory, ...newMessages];
+    const timezone = process.env.TIMEZONE || 'UTC';
+    const messagesWithTimestamp = newMessages.map(message => ({
+      ...message,
+      timestamp: moment().tz(timezone).toDate(),
+    }));
+
+    const updatedHistory = [...currentHistory, ...messagesWithTimestamp];
 
     // Poda el historial si excede el límite, pero siempre conserva el mensaje del sistema.
     if (updatedHistory.length > MAX_HISTORY_LENGTH) {
@@ -212,7 +219,7 @@ ${safeProductDescriptions}`;
  * @param {string} userEmail
  * @returns {Promise<Object>}
  */
-const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail) => {
+const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail, merchandId) => {
   // Nota: `getProductsByDomain` también podría ser cacheado si el catálogo no cambia constantemente.
   const products = await getProductsByDomain(domain);
 
@@ -237,11 +244,11 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
   if (!conversation) {
     const systemMessage = buildSystemMessage(domain, productDescriptions, config);
     conversation = [{ role: 'system', content: systemMessage }];
-    await chatHistoryManager.setHistory(domain, userId, userEmail, conversation);
+    await chatHistoryManager.setHistory(domain, userId, userEmail, conversation, merchandId);
   }
 
   // Añade el mensaje del usuario al historial para la llamada a la API.
-  const messagesForAPI = [...conversation, { role: 'user', content: userMessage }];
+  const messagesForAPI = [...conversation.map(({ role, content }) => ({ role, content })), { role: 'user', content: userMessage }];
 
   try {
     const { data } = await axios.post(
