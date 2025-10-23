@@ -81,8 +81,8 @@ const chatHistoryManager = {
 
     // Poda el historial si excede el límite, pero siempre conserva el mensaje del sistema.
     if (updatedHistory.length > MAX_HISTORY_LENGTH) {
-      const systemMessage = updatedHistory[0];
-      const conversation = updatedHistory.slice(1);
+      const systemMessage = updatedHistory.find(m => m.role === 'system');
+      const conversation = updatedHistory.filter(m => m.role !== 'system');
       const prunedConversation = conversation.slice(-MAX_HISTORY_LENGTH + 1);
       const finalHistory = [systemMessage, ...prunedConversation];
       await this.setHistory(domain, userId, userEmail, finalHistory);
