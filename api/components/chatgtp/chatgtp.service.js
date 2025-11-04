@@ -241,7 +241,10 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
   const relevantProductIds = await searchProducts(domain, allProducts, userMessage, apiKey);
 
   // 3. Recupera solo la información de los productos relevantes.
-  const relevantProducts = await getProductsByIds(relevantProductIds);
+  // Nos aseguramos de que los productos recuperados mantengan el orden de relevancia de la búsqueda.
+  const relevantProducts = await getProductsByIds(relevantProductIds).then(products =>
+    products.sort((a, b) => relevantProductIds.indexOf(a._id.toString()) - relevantProductIds.indexOf(b._id.toString()))
+  );
 
   // 4. Construye la descripción de los productos para el prompt.
   const productDescriptions = relevantProducts.map((p) => {

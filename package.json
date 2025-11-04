@@ -25,6 +25,7 @@
     "mongoose": "^8.9.3",
     "openai": "^4.6.0",
     "path": "^0.12.7",
-    "hnswlib-node": "^3.0.0"
+    "@langchain/openai": "^0.2.5",
+    "@langchain/community": "^0.2.19"
   }
 }
