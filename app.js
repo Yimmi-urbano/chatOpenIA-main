@@ -21,7 +21,12 @@ const ttsRouter = require('./api/components/convertTextToVoice/awsdolly.router')
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Configuración de CORS más flexible para permitir cualquier origen.
+app.use(cors({
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  allowedHeaders: 'Content-Type,Authorization'
+}));
 app.use(bodyParser.json());
 
 app.use('/chatbot', chatLimiter, chatRouter);
