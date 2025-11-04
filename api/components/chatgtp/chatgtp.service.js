@@ -12,7 +12,8 @@
 const axios = require('axios');
 const moment = require('moment-timezone');
 require('dotenv').config();
-const { getProductsByDomain } = require('./chatgtp.dao');
+const { getProductsByDomain, getProductsByIds } = require('./chatgtp.dao');
+const { searchProducts } = require('../vector-search/vector.service');
 const { Conversation } = require('../../../config/database');
 
 // --- Configuración Centralizada ---
@@ -20,7 +21,8 @@ const { Conversation } = require('../../../config/database');
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = 'gpt-4o';
 const MAX_HISTORY_LENGTH = 10; // Mantiene el sistema (prompt) + los últimos 9 intercambios.
-const CACHE = new Map(); // Caché en memoria simple para configuraciones de dominio.
+const CONFIG_CACHE = new Map(); // Caché para la configuración de negocio.
+const PRODUCT_CACHE = new Map(); // Caché para los productos por dominio.
 
 /**
  * --- Gestión de Historial (Abstracción para Escalabilidad) ---
@@ -100,8 +102,8 @@ const chatHistoryManager = {
  * @returns {Promise<Object>}
  */
 const fetchConfig = async (domain) => {
-  if (CACHE.has(domain)) {
-    return CACHE.get(domain);
+  if (CONFIG_CACHE.has(domain)) {
+    return CONFIG_CACHE.get(domain);
   }
 
   try {
@@ -110,7 +112,7 @@ const fetchConfig = async (domain) => {
     });
 
     const config = data?.[0] || {};
-    CACHE.set(domain, config); // Almacena en caché el resultado exitoso.
+    CONFIG_CACHE.set(domain, config); // Almacena en caché el resultado exitoso.
     return config;
   } catch (err) {
     console.error(`Error al obtener configuración para ${domain}:`, err.message);
@@ -220,10 +222,14 @@ ${safeProductDescriptions}`;
  * @returns {Promise<Object>}
  */
 const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail, merchandId) => {
-  // Nota: `getProductsByDomain` también podría ser cacheado si el catálogo no cambia constantemente.
-  const products = await getProductsByDomain(domain);
+  // 1. Carga de productos desde el caché o la base de datos.
+  let allProducts = PRODUCT_CACHE.get(domain);
+  if (!allProducts) {
+    allProducts = await getProductsByDomain(domain);
+    PRODUCT_CACHE.set(domain, allProducts);
+  }
 
-  if (!products?.length) {
+  if (!allProducts?.length) {
     return {
       message: 'No hay productos disponibles para esta tienda en este momento.',
       audio_description: 'El catálogo de esta tienda está vacío.',
@@ -231,7 +237,14 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
     };
   }
 
-  const productDescriptions = products.map((p) => {
+  // 2. Búsqueda vectorial para encontrar los productos más relevantes.
+  const relevantProductIds = await searchProducts(domain, allProducts, userMessage, apiKey);
+
+  // 3. Recupera solo la información de los productos relevantes.
+  const relevantProducts = await getProductsByIds(relevantProductIds);
+
+  // 4. Construye la descripción de los productos para el prompt.
+  const productDescriptions = relevantProducts.map((p) => {
     const clean = (str) => (str || '').replace(/\r?\n|\r/g, ' ').replace(/"/g, "'");
     return `ID: ${p._id}, Nombre: "${clean(p.title)}", Precio: S/${p.price?.regular ?? 'N/A'}, Oferta: S/${p.price?.sale ?? 'N/A'}, Descripción: ${clean(p.description_short)}, URL: /product/${p.slug}, IMAGEN: ${p.image_default[0]}, SLUG: ${p.slug}`;
   }).join(' | ');
