@@ -4,4 +4,8 @@ const getProductsByDomain = async (domain) => {
   return await Product.find({ domain });
 };
 
-module.exports = { getProductsByDomain };
+const getProductsByIds = async (ids) => {
+  return await Product.find({ _id: { $in: ids } });
+};
+
+module.exports = { getProductsByDomain, getProductsByIds };
