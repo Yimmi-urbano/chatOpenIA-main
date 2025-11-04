@@ -13,7 +13,7 @@
  */
 
 const { OpenAIEmbeddings } = require('@langchain/openai');
-const { MemoryVectorStore } = require('@langchain/community/vectorstores/memory');
+const { MemoryVectorStore } = require('langchain/vectorstores/memory');
 require('dotenv').config();
 
 const VECTOR_STORE_CACHE = new Map(); // Caché para los MemoryVectorStore por dominio.
