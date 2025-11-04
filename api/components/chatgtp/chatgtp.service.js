@@ -296,9 +296,25 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
     // Almacena el turno del usuario y la respuesta del asistente en el historial.
     await chatHistoryManager.appendToHistory(domain, userId, userEmail, [
       { role: 'user', content: userMessage },
-      // Es crucial guardar el contenido exacto que la IA generó para mantener el contexto.
       { role: 'assistant', content: rawAssistantResponse },
     ]);
+
+    // --- Enriquecimiento de la Acción ---
+    // Si la IA decide añadir al carrito, nos aseguramos de que todos los detalles del producto se incluyan.
+    if (assistantReply.action?.type === 'add_to_cart' && assistantReply.action.productId) {
+      const product = allProducts.find(p => p._id.toString() === assistantReply.action.productId);
+      if (product) {
+        assistantReply.action = {
+          ...assistantReply.action,
+          url: `/product/${product.slug}`,
+          price_sale: product.price?.sale,
+          title: product.title,
+          price_regular: product.price?.regular,
+          image: product.image_default?.[0],
+          slug: product.slug,
+        };
+      }
+    }
 
     return {
       message: assistantReply.message ?? 'Respuesta vacía.',
