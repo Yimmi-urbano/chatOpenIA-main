@@ -224,7 +224,7 @@ ${safeProductDescriptions}`;
  */
 const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail, merchandId) => {
   // 1. Carga de productos desde Redis (caché) o la base de datos (fuente de verdad).
-  const cacheKey = \`products:\${domain}\`;
+  const cacheKey = `products:${domain}`;
   let allProducts;
 
   try {
