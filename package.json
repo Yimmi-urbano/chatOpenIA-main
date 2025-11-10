@@ -11,6 +11,8 @@
   "keywords": [],
   "description": "",
   "dependencies": {
+    "@langchain/community": "^0.2.19",
+    "@langchain/openai": "^0.2.5",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.7.9",
     "body-parser": "^1.20.3",
@@ -20,12 +22,11 @@
     "express-rate-limit": "^8.1.0",
     "fs": "^0.0.1-security",
     "http-status-codes": "^2.3.0",
+    "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "moment-timezone": "^0.6.0",
     "mongoose": "^8.9.3",
     "openai": "^4.6.0",
-    "path": "^0.12.7",
-    "@langchain/openai": "^0.2.5",
-    "@langchain/community": "^0.2.19"
+    "path": "^0.12.7"
   }
 }

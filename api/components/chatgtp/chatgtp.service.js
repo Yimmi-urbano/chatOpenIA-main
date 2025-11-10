@@ -15,6 +15,7 @@ require('dotenv').config();
 const { getProductsByDomain, getProductsByIds } = require('./chatgtp.dao');
 const { searchProducts } = require('../vector-search/vector.service');
 const { Conversation } = require('../../../config/database');
+const redisClient = require('../../../config/redis');
 
 // --- Configuración Centralizada ---
 // Mover constantes a un solo lugar facilita su modificación y mantenimiento.
@@ -22,7 +23,7 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = 'gpt-4o';
 const MAX_HISTORY_LENGTH = 10; // Mantiene el sistema (prompt) + los últimos 9 intercambios.
 const CONFIG_CACHE = new Map(); // Caché para la configuración de negocio.
-const PRODUCT_CACHE = new Map(); // Caché para los productos por dominio.
+// const PRODUCT_CACHE = new Map(); // Se elimina la caché en memoria para productos.
 
 /**
  * --- Gestión de Historial (Abstracción para Escalabilidad) ---
@@ -133,7 +134,7 @@ const buildSystemMessage = (domain, productDescriptions, infoBusiness) => {
   const safeProductDescriptions = JSON.stringify(productDescriptions, null, 2);
 
   // El uso de plantillas literales (`) mejora drásticamente la legibilidad y mantenimiento del prompt.
-  return `Eres un asistente de ventas experto, amable y consultivo para la tienda "${domain}", que se especializa en comercio electrónico. Usa únicamente la siguiente información de la empresa: ${safeBusinessInfo}. Tu propósito es ayudar a los usuarios de manera clara, segura y personalizada, siguiendo estrictamente las reglas y formatos establecidos.
+  return \`Eres un asistente de ventas experto, amable y consultivo para la tienda "\${domain}", que se especializa en comercio electrónico. Usa únicamente la siguiente información de la empresa: \${safeBusinessInfo}. Tu propósito es ayudar a los usuarios de manera clara, segura y personalizada, siguiendo estrictamente las reglas y formatos establecidos.
 
 ---
 
@@ -208,7 +209,7 @@ Ejemplo:
 
 ### CATÁLOGO DISPONIBLE
 Usa solo esta información para responder. No inventes productos, características ni URL:
-${safeProductDescriptions}`;
+\${safeProductDescriptions}\`;
 };
 
 
@@ -222,11 +223,23 @@ ${safeProductDescriptions}`;
  * @returns {Promise<Object>}
  */
 const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail, merchandId) => {
-  // 1. Carga de productos desde el caché o la base de datos.
-  let allProducts = PRODUCT_CACHE.get(domain);
-  if (!allProducts) {
+  // 1. Carga de productos desde Redis (caché) o la base de datos (fuente de verdad).
+  const cacheKey = \`products:\${domain}\`;
+  let allProducts;
+
+  try {
+    const cachedProducts = await redisClient.get(cacheKey);
+    if (cachedProducts) {
+      allProducts = JSON.parse(cachedProducts);
+    } else {
+      allProducts = await getProductsByDomain(domain);
+      // Almacena en Redis con un tiempo de expiración (ej. 1 hora).
+      await redisClient.set(cacheKey, JSON.stringify(allProducts), 'EX', process.env.REDIS_CACHE_EXPIRATION || 3600);
+    }
+  } catch (error) {
+    console.error('Error al interactuar con Redis o la base de datos:', error);
+    // Fallback: si Redis falla, intenta obtener los productos directamente de la base de datos.
     allProducts = await getProductsByDomain(domain);
-    PRODUCT_CACHE.set(domain, allProducts);
   }
 
   if (!allProducts?.length) {
@@ -249,7 +262,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
   // 4. Construye la descripción de los productos para el prompt.
   const productDescriptions = relevantProducts.map((p) => {
     const clean = (str) => (str || '').replace(/\r?\n|\r/g, ' ').replace(/"/g, "'");
-    return `ID: ${p._id}, Nombre: "${clean(p.title)}", Precio: S/${p.price?.regular ?? 'N/A'}, Oferta: S/${p.price?.sale ?? 'N/A'}, Descripción: ${clean(p.description_short)}, URL: /product/${p.slug}, IMAGEN: ${p.image_default[0]}, SLUG: ${p.slug}`;
+    return \`ID: \${p._id}, Nombre: "\${clean(p.title)}", Precio: S/\${p.price?.regular ?? 'N/A'}, Oferta: S/\${p.price?.sale ?? 'N/A'}, Descripción: \${clean(p.description_short)}, URL: /product/\${p.slug}, IMAGEN: \${p.image_default[0]}, SLUG: \${p.slug}\`;
   }).join(' | ');
 
   const config = await fetchConfig(domain);
@@ -278,7 +291,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
       },
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: \`Bearer \${apiKey}\`,
           'Content-Type': 'application/json',
         },
       }
@@ -309,7 +322,7 @@ const processChatWithGPT = async (domain, userMessage, apiKey, userId, userEmail
       if (product) {
         assistantReply.action = {
           ...assistantReply.action,
-          url: `/product/${product.slug}`,
+          url: \`/product/\${product.slug}\`,
           price_sale: product.price?.sale,
           title: product.title,
           price_regular: product.price?.regular,
